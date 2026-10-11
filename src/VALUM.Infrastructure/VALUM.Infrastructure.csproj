@@ -11,4 +11,9 @@
     <ProjectReference Include="..\VALUM.Domain\VALUM.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" />
+  </ItemGroup>
+
 </Project>

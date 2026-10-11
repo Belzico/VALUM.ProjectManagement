@@ -146,15 +146,19 @@ namespace VALUM.Tests.Integration.Application
             services.AddTransient<IRequestHandler<InvalidCommand, InvalidResponse>, InvalidCommandHandler>();
 
             // Validator A
-            services.AddTransient<IValidator<InvalidCommand>>(sp => new InlineValidator<InvalidCommand>
+            services.AddTransient<IValidator<InvalidCommand>>(sp =>
             {
-                v => v.RuleFor(x => x.Value).GreaterThan(0).WithMessage("A")
+                var v = new InlineValidator<InvalidCommand>();
+                v.RuleFor(x => x.Value).GreaterThan(0).WithMessage("A");
+                return v;
             });
 
             // Validator B
-            services.AddTransient<IValidator<InvalidCommand>>(sp => new InlineValidator<InvalidCommand>
+            services.AddTransient<IValidator<InvalidCommand>>(sp =>
             {
-                v => v.RuleFor(x => x.Value).GreaterThan(1).WithMessage("B")
+                var v = new InlineValidator<InvalidCommand>();
+                v.RuleFor(x => x.Value).GreaterThan(1).WithMessage("B");
+                return v;
             });
 
             services.AddApplication();
