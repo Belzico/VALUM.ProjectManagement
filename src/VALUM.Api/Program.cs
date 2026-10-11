@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using VALUM.Application;
 using VALUM.Infrastructure;
 using VALUM.Infrastructure.Persistence;
+using VALUM.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,9 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 
 var app = builder.Build();
+
+// Global exception handling must be registered early in the pipeline
+app.UseCustomExceptionHandling();
 
 // Map controllers
 app.MapControllers();

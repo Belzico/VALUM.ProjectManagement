@@ -25,7 +25,7 @@ namespace VALUM.Tests.Unit.Application.Behaviors
             original.Add(new ValidationFailure("Value", "second"));
 
             // Assert: exception.Errors should not reflect mutation
-            Assert.Equal(1, ex.Errors.Count);
+            Assert.Single(ex.Errors);
             Assert.Equal("first", ex.Errors.First().ErrorMessage);
         }
 
