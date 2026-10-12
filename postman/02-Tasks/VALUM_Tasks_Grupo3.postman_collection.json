@@ -1,0 +1,1930 @@
+{
+  "info": {
+    "name": "VALUM API — Tasks | Grupo 3 (CORREGIDA)",
+    "_postman_id": "c1a63b6f-9c64-4a5e-afc9-3e5b5c84e112",
+    "description": "Independent local API acceptance suite for VALUM Group 3. CORRECTED edition: unique g3_ variable namespace prevents collisions with existing Postman environments and Group 2; each successful create captures its ID BEFORE secondary assertions; nonexistent task ID is never reused for a created task. 57 HTTP requests in strict order. Requires full Collection Runner with no parallel execution. Defaults to http://localhost:4596; local isolated SQLite DB only. Fresh project created on each run; no seed. Group 4 archive RN-01 HTTP acceptance is deferred until the archive endpoint exists. For restart persistence, manually resend final GET with same SQLite DB after restarting API. If a request fails, inspect the FIRST failed response before cascading assertions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 — Preparación",
+      "description": "Run this folder first. It creates a new dedicated project in the isolated database.",
+      "item": [
+        {
+          "name": "00 — API health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Starts a fresh run. Requires VALUM API running against a dedicated disposable SQLite DB; never point this collection at production."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"g3_runToken\", Date.now().toString(36));",
+                  "pm.collectionVariables.set(\"g3_nonexistentProjectId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "pm.collectionVariables.set(\"g3_nonexistentTaskId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "[\"g3_projectId\",\"g3_primaryTaskId\",\"g3_twinTaskId\",\"g3_negativeTaskId\",\"g3_nullTaskId\",\"g3_omittedDueDateTaskId\",\"g3_primaryDueDate\",\"g3_completedAtValue\",\"g3_page1Ids\",\"g3_page2Ids\"].forEach(k => pm.collectionVariables.unset(k));",
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01 — Create isolated project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "Creates a NEW project each Runner execution; no hardcoded seeded identifiers.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VALUM-Tasks-{{g3_runToken}}\",\n  \"description\": \"Automated isolated Postman tasks acceptance project\",\n  \"ownerId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (typeof body.id === \"string\" && /^[0-9a-fA-F-]{36}$/.test(body.id)) pm.collectionVariables.set(\"g3_projectId\", body.id);",
+                  "}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Project created with isolated GUID\", function () {",
+                  "  const p = pm.response.json();",
+                  "  pm.expect(p.id).to.match(/^[0-9a-fA-F-]{36}$/);",
+                  "  pm.expect(p.status).to.eql(0);",
+                  "  pm.expect(p.name).to.include(\"VALUM-Tasks-\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Ciclo de vida",
+      "description": "Checks 201, 200, 204, 422, CreatedAt, exact DueDate, CompletedAt transitions and persistence.",
+      "item": [
+        {
+          "name": "02 — Create primary task, 7-digit UTC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Primary-{{g3_runToken}}\",\n  \"description\": \"Lifecycle and exact 7-digit UTC\",\n  \"priority\": 1,\n  \"dueDate\": \"2026-12-31T23:59:59.1234567Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (typeof body.id === \"string\" && /^[0-9a-fA-F-]{36}$/.test(body.id)) pm.collectionVariables.set(\"g3_primaryTaskId\",body.id);",
+                  "  if (typeof body.dueDate === \"string\") pm.collectionVariables.set(\"g3_primaryDueDate\", body.dueDate);",
+                  "}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Primary task initialized and location provided\", function () {",
+                  "  const t=pm.response.json();",
+                  "  pm.expect(t.id).to.match(/^[0-9a-fA-F-]{36}$/);",
+                  "  pm.expect(t.projectId.toLowerCase()).to.eql(pm.collectionVariables.get(\"g3_projectId\").toLowerCase());",
+                  "  pm.expect(t.status).to.eql(0);",
+                  "  pm.expect(t.priority).to.eql(1);",
+                  "  pm.expect(t.completedAt).to.be.null;",
+                  "  pm.expect(t.dueDate).to.eql(\"2026-12-31T23:59:59.1234567Z\");",
+                  "  pm.expect(t.createdAt).to.match(/Z$/);",
+                  "  pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/api/tasks/\"+t.id);",
+                  "  ",
+                  "  ",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — GET primary task by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Primary task persisted with precise UTC\", function () {",
+                  "  const t=pm.response.json();",
+                  "  pm.expect(t.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g3_primaryTaskId\").toLowerCase());",
+                  "  pm.expect(t.dueDate).to.eql(\"2026-12-31T23:59:59.1234567Z\");",
+                  "  pm.expect(t.status).to.eql(0);",
+                  "  pm.expect(t.completedAt).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — PATCH primary to InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });pm.test(\"No content returned\", function(){pm.expect(pm.response.text()).to.eql(\"\");});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — GET verifies InProgress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"InProgress, no CompletedAt\", function(){const t=pm.response.json();pm.expect(t.status).to.eql(1);pm.expect(t.completedAt).to.be.null;});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — PATCH primary to Done",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — GET verifies Done UTC",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Done has a UTC completion timestamp\", function(){",
+                  "  const t=pm.response.json();",
+                  "  pm.expect(t.status).to.eql(2);",
+                  "  pm.expect(t.completedAt).to.match(/Z$/);",
+                  "  const when=Date.parse(t.completedAt);",
+                  "  pm.expect(Number.isNaN(when)).to.eql(false);",
+                  "  pm.expect(Math.abs(Date.now()-when)).to.be.lessThan(120000);",
+                  "  pm.collectionVariables.set(\"g3_completedAtValue\",t.completedAt);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 — Repeating Done rejects 422",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"VALUM error schema (422)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(422);",
+                  "  pm.expect(e.error).to.eql(\"DomainException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 — PATCH Done to Todo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 — GET CompletedAt cleared",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Transition away from Done clears timestamp\",function(){const t=pm.response.json();pm.expect(t.status).to.eql(0);pm.expect(t.completedAt).to.be.null;});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Datos y UTC",
+      "description": "Creates four more tasks in the same project. Tests precise timezone conversion, nullable/missing dates and status filters.",
+      "item": [
+        {
+          "name": "11 — Create equivalent instant with +02:00",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "This covers the unproven equivalence test: TWO DIFFERENT input representations of the same instant.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"OffsetTwin-{{g3_runToken}}\",\n  \"priority\": 2,\n  \"dueDate\": \"2027-01-01T01:59:59.1234567+02:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (typeof body.id === \"string\" && /^[0-9a-fA-F-]{36}$/.test(body.id)) pm.collectionVariables.set(\"g3_twinTaskId\",body.id);",
+                  "}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Same instant in +02:00 is exactly equal to Z\",function(){",
+                  "  const t=pm.response.json();",
+                  "  pm.expect(t.dueDate).to.eql(pm.collectionVariables.get(\"g3_primaryDueDate\"));",
+                  "  pm.expect(t.dueDate).to.eql(\"2026-12-31T23:59:59.1234567Z\");",
+                  "  pm.expect(t.priority).to.eql(2);",
+                  "  ",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 — GET equivalent +02:00 persisted",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_twinTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Offset-twin retrieved UTC ticks-equivalent representation\",function(){const t=pm.response.json();pm.expect(t.dueDate).to.eql(\"2026-12-31T23:59:59.1234567Z\");pm.expect(t.priority).to.eql(2);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 — Create negative offset (-05:30)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"NegativeOffset-{{g3_runToken}}\",\n  \"priority\": 0,\n  \"dueDate\": \"2026-12-31T23:59:59-05:30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (typeof body.id === \"string\" && /^[0-9a-fA-F-]{36}$/.test(body.id)) pm.collectionVariables.set(\"g3_negativeTaskId\",body.id);",
+                  "}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });pm.test(\"Negative offset crosses UTC year correctly\",function(){const t=pm.response.json();pm.expect(t.dueDate).to.eql(\"2027-01-01T05:29:59Z\");pm.expect(t.priority).to.eql(0);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 — Create nullable DueDate task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"NullDueDate-{{g3_runToken}}\",\n  \"priority\": 2,\n  \"dueDate\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (typeof body.id === \"string\" && /^[0-9a-fA-F-]{36}$/.test(body.id)) pm.collectionVariables.set(\"g3_nullTaskId\",body.id);",
+                  "}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });pm.test(\"Explicit null is persisted as null\",function(){const t=pm.response.json();pm.expect(t.dueDate).to.be.null;pm.expect(t.priority).to.eql(2);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 — Create task without DueDate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"MissingDueDate-{{g3_runToken}}\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (typeof body.id === \"string\" && /^[0-9a-fA-F-]{36}$/.test(body.id)) pm.collectionVariables.set(\"g3_omittedDueDateTaskId\",body.id);",
+                  "}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });pm.test(\"Missing DueDate is null\",function(){const t=pm.response.json();pm.expect(t.dueDate).to.be.null;pm.expect(t.priority).to.eql(0);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 — Set null-DueDate task InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_nullTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 — Confirm null-DueDate task InProgress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_nullTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"InProgress status persisted\",function(){const t=pm.response.json();pm.expect(t.status).to.eql(1);pm.expect(t.completedAt).to.be.null;pm.expect(t.dueDate).to.be.null;});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Listados y RN-05",
+      "description": "Filters by status/priority, DB pagination, stable page traversal, project summary counts.",
+      "item": [
+        {
+          "name": "18 — GET default list (5 tasks)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"PagedResult structure, defaults and task count\",function(){",
+                  " const p=pm.response.json();",
+                  " pm.expect(p.items).to.be.an(\"array\").with.length(5);",
+                  " pm.expect(p.page).to.eql(1);",
+                  " pm.expect(p.pageSize).to.eql(10);",
+                  " pm.expect(p.totalCount).to.eql(5);",
+                  " pm.expect(p.totalPages).to.eql(1);",
+                  " pm.expect(p.hasPrevious).to.eql(false);",
+                  " pm.expect(p.hasNext).to.eql(false);",
+                  " const ids=p.items.map(x=>x.id.toLowerCase());",
+                  " [\"g3_primaryTaskId\",\"g3_twinTaskId\",\"g3_negativeTaskId\",\"g3_nullTaskId\",\"g3_omittedDueDateTaskId\"].forEach(k=>pm.expect(ids).to.include(pm.collectionVariables.get(k).toLowerCase()));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 — GET filter priority=High",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?priority=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"High priority exactly two\",function(){const p=pm.response.json();pm.expect(p.totalCount).to.eql(2);pm.expect(p.items).to.have.length(2);p.items.forEach(t=>pm.expect(t.priority).to.eql(2));});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 — GET filter status=InProgress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?status=1",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Only active in-progress task returned\",function(){const p=pm.response.json();pm.expect(p.totalCount).to.eql(1);pm.expect(p.items[0].id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g3_nullTaskId\").toLowerCase());pm.expect(p.items[0].status).to.eql(1);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 — GET combined status and priority",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?status=0&priority=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Combined filters narrow result correctly\",function(){const p=pm.response.json();pm.expect(p.totalCount).to.eql(1);pm.expect(p.items[0].id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g3_twinTaskId\").toLowerCase());pm.expect(p.items[0].status).to.eql(0);pm.expect(p.items[0].priority).to.eql(2);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 — GET page=1 size=2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?page=1&pageSize=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Pagination first page\",function(){const p=pm.response.json();pm.expect(p.items).to.have.length(2);pm.expect(p.totalCount).to.eql(5);pm.expect(p.totalPages).to.eql(3);pm.expect(p.hasPrevious).to.eql(false);pm.expect(p.hasNext).to.eql(true);pm.collectionVariables.set(\"g3_page1Ids\",JSON.stringify(p.items.map(t=>t.id)));});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 — GET page=2 size=2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?page=2&pageSize=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Pagination second page, no overlap\",function(){const p=pm.response.json();const ids=p.items.map(t=>t.id);pm.expect(ids).to.have.length(2);pm.expect(p.totalPages).to.eql(3);pm.expect(p.hasPrevious).to.eql(true);pm.expect(p.hasNext).to.eql(true);JSON.parse(pm.collectionVariables.get(\"g3_page1Ids\")).forEach(id=>pm.expect(ids).not.to.include(id));pm.collectionVariables.set(\"g3_page2Ids\",JSON.stringify(ids));});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24 — GET page=3 size=2, unique IDs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?page=3&pageSize=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"All pages yield 5 different task IDs\",function(){const p=pm.response.json();pm.expect(p.items).to.have.length(1);pm.expect(p.hasPrevious).to.eql(true);pm.expect(p.hasNext).to.eql(false);const ids=[...JSON.parse(pm.collectionVariables.get(\"g3_page1Ids\")),...JSON.parse(pm.collectionVariables.get(\"g3_page2Ids\")),...p.items.map(t=>t.id)];pm.expect(new Set(ids.map(s=>s.toLowerCase())).size).to.eql(5);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "25 — GET project summary (5 tasks)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"RN-05 summary reflects active task statuses\",function(){const r=pm.response.json();pm.expect(r.project.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g3_projectId\").toLowerCase());pm.expect(r.summary.totalTasks).to.eql(5);pm.expect(r.summary.completedTasks).to.eql(0);pm.expect(r.summary.inProgressTasks).to.eql(1);pm.expect(r.summary.pendingTasks).to.eql(4);});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Validaciones HTTP",
+      "description": "Negative cases return VALUM standardized JSON error schema and do not persist invalid tasks.",
+      "item": [
+        {
+          "name": "26 — POST invalid priority 99 =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Invalid priority\",\n  \"priority\": 99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27 — POST malformed project GUID =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/not-a-guid/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Invalid project route\",\n  \"priority\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "28 — GET malformed project GUID =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/not-a-guid/tasks",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29 — GET empty project GUID =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/00000000-0000-0000-0000-000000000000/tasks",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "30 — GET nonexistent project =>404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_nonexistentProjectId}}/tasks",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM error schema (404)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(404);",
+                  "  pm.expect(e.error).to.eql(\"NotFoundException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "31 — POST nonexistent project =>404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_nonexistentProjectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Orphan task\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM error schema (404)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(404);",
+                  "  pm.expect(e.error).to.eql(\"NotFoundException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "32 — GET malformed task GUID =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/not-a-guid",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "33 — GET nonexistent task =>404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_nonexistentTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM error schema (404)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(404);",
+                  "  pm.expect(e.error).to.eql(\"NotFoundException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "34 — GET invalid page=0 =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?page=0",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "35 — GET invalid pageSize=51 =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?pageSize=51",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "36 — GET invalid status=99 =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?status=99",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "37 — GET invalid priority=99 =>400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks?priority=99",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "38 — POST DueDate without timezone =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Naive date\",\n  \"priority\": 0,\n  \"dueDate\": \"2026-12-31T23:59:59\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "39 — POST empty DueDate =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Empty date\",\n  \"priority\": 0,\n  \"dueDate\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "40 — POST whitespace DueDate =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Blank date\",\n  \"priority\": 0,\n  \"dueDate\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "41 — POST malformed +02 offset =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Malformed offset\",\n  \"priority\": 0,\n  \"dueDate\": \"2026-12-31T23:59:59+02\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42 — POST space instead of T =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Invalid date separator\",\n  \"priority\": 0,\n  \"dueDate\": \"2026-12-31 23:59:59+02:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "43 — POST impossible date =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Impossible date\",\n  \"priority\": 0,\n  \"dueDate\": \"2026-02-30T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "44 — POST offset +15:00 =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Outside offset range\",\n  \"priority\": 0,\n  \"dueDate\": \"2026-12-31T23:59:59+15:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "45 — POST whitespace Title =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"    \",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "46 — POST Title 101 chars =>400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "47 — PATCH invalid status 99 =>400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_twinTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM error schema (400)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(400);",
+                  "  pm.expect(e.error).to.eql(\"ValidationException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "48 — Verify invalid requests added zero tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Rejected commands did not create rows\",function(){const p=pm.response.json();pm.expect(p.totalCount).to.eql(5);pm.expect(p.items).to.have.length(5);});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Soft-delete y persistencia",
+      "description": "DELETE/DELETE/GET/PATCH/list/summary regression. The final request can also be resent manually AFTER API restart.",
+      "item": [
+        {
+          "name": "49 — DELETE primary task =>204",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });pm.test(\"DELETE has empty body\",function(){pm.expect(pm.response.text()).to.eql(\"\");});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "50 — Repeat DELETE =>204 (RN-04)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": "Different HTTP request/DI scope. Together with database integration tests, covers idempotence."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });pm.test(\"Repeated DELETE is idempotent\",function(){pm.expect(pm.response.text()).to.eql(\"\");});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "51 — GET soft-deleted task =>404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM error schema (404)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(404);",
+                  "  pm.expect(e.error).to.eql(\"NotFoundException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "52 — PATCH deleted task =>404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g3_primaryTaskId}}/status",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM error schema (404)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(404);",
+                  "  pm.expect(e.error).to.eql(\"NotFoundException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "53 — GET list excludes soft-deleted",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}/tasks",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Soft-deleted task hidden; 4 remain\",function(){const p=pm.response.json();pm.expect(p.totalCount).to.eql(4);pm.expect(p.items).to.have.length(4);pm.expect(p.items.map(t=>t.id.toLowerCase())).not.to.include(pm.collectionVariables.get(\"g3_primaryTaskId\").toLowerCase());});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "54 — GET project summary excludes deleted",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g3_projectId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"RN-05 summary excludes deleted task\",function(){const s=pm.response.json().summary;pm.expect(s.totalTasks).to.eql(4);pm.expect(s.completedTasks).to.eql(0);pm.expect(s.inProgressTasks).to.eql(1);pm.expect(s.pendingTasks).to.eql(3);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "55 — DELETE nonexistent task =>404",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_nonexistentTaskId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM error schema (404)\", function () {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.status).to.eql(404);",
+                  "  pm.expect(e.error).to.eql(\"NotFoundException\");",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "56 — GET twin for restart persistence check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g3_twinTaskId}}",
+            "description": "After a successful Runner execution: STOP the API, START it again with the SAME dedicated valum_postman_test.db, then SEND THIS REQUEST MANUALLY to verify persistence across process restart."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });pm.test(\"Task survives distinct requests with exact UTC value\",function(){const t=pm.response.json();pm.expect(t.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g3_twinTaskId\").toLowerCase());pm.expect(t.dueDate).to.eql(\"2026-12-31T23:59:59.1234567Z\");pm.expect(t.status).to.eql(0);});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4596",
+      "type": "string"
+    },
+    {
+      "key": "g3_runToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_projectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_primaryTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_twinTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_negativeTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_nullTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_nonexistentTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_nonexistentProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_primaryDueDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_page1Ids",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_page2Ids",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_omittedDueDateTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g3_completedAtValue",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

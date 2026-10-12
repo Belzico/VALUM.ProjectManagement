@@ -17,5 +17,7 @@ namespace VALUM.Application.Projects
         Task<Project?> GetByIdAsync(Guid id);
 
         Task<ProjectTaskSummary?> GetTaskSummaryAsync(Guid projectId);
+
+        Task<bool> ExistsAsync(Guid id);
     }
 }

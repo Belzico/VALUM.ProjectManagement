@@ -16,6 +16,7 @@ namespace VALUM.Infrastructure
 
             // Application repositories
             services.AddScoped<VALUM.Application.Projects.IProjectRepository, VALUM.Infrastructure.Projects.ProjectRepository>();
+            services.AddScoped<VALUM.Application.Tasks.ITaskRepository, VALUM.Infrastructure.Tasks.TaskRepository>();
 
             return services;
         }

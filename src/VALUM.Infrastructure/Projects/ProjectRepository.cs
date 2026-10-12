@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using VALUM.Application.Projects;
 using VALUM.Domain.Entities;
+using VALUM.Domain.Enums;
 using VALUM.Infrastructure.Persistence;
 
 namespace VALUM.Infrastructure.Projects
@@ -25,14 +26,14 @@ namespace VALUM.Infrastructure.Projects
         }
 
         // Read operations used by application queries
-        public async Task<int> CountAsync(VALUM.Domain.Enums.ProjectStatus? status = null)
+        public async Task<int> CountAsync(ProjectStatus? status = null)
         {
             var q = _context.Projects.AsQueryable();
             if (status.HasValue) q = q.Where(p => p.Status == status.Value);
             return await q.CountAsync();
         }
 
-        public async Task<List<Project>> GetPageAsync(VALUM.Domain.Enums.ProjectStatus? status, int skip, int take)
+        public async Task<List<Project>> GetPageAsync(ProjectStatus? status, int skip, int take)
         {
             var q = _context.Projects.AsQueryable();
             if (status.HasValue) q = q.Where(p => p.Status == status.Value);
@@ -54,6 +55,11 @@ namespace VALUM.Infrastructure.Projects
             var inProgress = await q.CountAsync(t => t.Status == VALUM.Domain.Enums.TaskStatus.InProgress);
             var pending = await q.CountAsync(t => t.Status == VALUM.Domain.Enums.TaskStatus.Todo);
             return new ProjectTaskSummary { Total = total, Completed = completed, InProgress = inProgress, Pending = pending };
+        }
+
+        public async Task<bool> ExistsAsync(Guid id)
+        {
+            return await _context.Projects.AnyAsync(p => p.Id == id);
         }
     }
 }
