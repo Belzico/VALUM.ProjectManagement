@@ -31,6 +31,13 @@ namespace VALUM.Infrastructure.Tasks
             return project != null && project.Status == ProjectStatus.Archived;
         }
 
+        public async Task<bool> HasActiveInProgressTasksAsync(Guid projectId)
+        {
+            return await _context.Tasks
+                .Where(t => t.ProjectId == projectId && t.Status == VALUM.Domain.Enums.TaskStatus.InProgress && !t.IsDeleted)
+                .AnyAsync();
+        }
+
         public async Task<List<TaskItem>> GetPageAsync(Guid projectId, VALUM.Domain.Enums.TaskStatus? status, TaskPriority? priority, int skip, int take)
         {
             var q = _context.Tasks.Where(t => t.ProjectId == projectId && !t.IsDeleted);

@@ -10,6 +10,7 @@ namespace VALUM.Application.Tasks
     {
         Task AddAsync(TaskItem task);
         Task<bool> IsProjectArchivedAsync(Guid projectId);
+        Task<bool> HasActiveInProgressTasksAsync(Guid projectId);
         Task<List<TaskItem>> GetPageAsync(Guid projectId, VALUM.Domain.Enums.TaskStatus? status, TaskPriority? priority, int skip, int take);
         Task<int> CountAsync(Guid projectId, VALUM.Domain.Enums.TaskStatus? status, TaskPriority? priority);
         Task<TaskItem?> GetByIdAsync(Guid id);

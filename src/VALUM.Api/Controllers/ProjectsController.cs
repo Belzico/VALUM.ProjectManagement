@@ -65,5 +65,35 @@ namespace VALUM.Api.Controllers
                 }
             });
         }
+
+        [HttpPatch("{id}/archive")]
+        public async Task<IActionResult> Archive([FromRoute] string id)
+        {
+            if (!Guid.TryParse(id, out var guidId))
+            {
+                return BadRequest(new
+                {
+                    status = 400,
+                    error = "ValidationException",
+                    message = "Invalid project ID format.",
+                    details = Array.Empty<object>()
+                });
+            }
+
+            if (guidId == Guid.Empty)
+            {
+                return BadRequest(new
+                {
+                    status = 400,
+                    error = "ValidationException",
+                    message = "Project ID cannot be empty.",
+                    details = Array.Empty<object>()
+                });
+            }
+
+            var command = new ArchiveProjectCommand { Id = guidId };
+            await _mediator.Send(command);
+            return NoContent();
+        }
     }
 }

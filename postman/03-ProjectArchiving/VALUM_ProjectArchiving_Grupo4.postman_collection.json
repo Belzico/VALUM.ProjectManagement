@@ -1,0 +1,1654 @@
+{
+  "info": {
+    "_postman_id": "bc96eb9d-dfa9-44d6-9045-585ca71bc8c8",
+    "name": "VALUM API — Project Archiving | Grupo 4",
+    "description": "Independent HTTP acceptance tests for VALUM Group 4. Executes real requests against a locally running ASP.NET Core API and isolated SQLite database. Covers RN-01 to RN-06 integrated, RN-02 blocking and soft deletion, idempotent archive, state changes after archive, validation and project/task list filtering. RUN IN ORDER from the first item; each run creates five unique projects and does not rely on development seed. Uses collection variables g4_* to avoid namespace conflicts with Group 2/3. Never run against a production database.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 — Preparación aislada",
+      "description": "Initializes unique project names and identifiers; creates five test projects. No seed dependency, no deletion of earlier test data.",
+      "item": [
+        {
+          "name": "00 — API health and initialize G4 variables",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('g4_runTag', Date.now().toString(36)); pm.collectionVariables.set('g4_missingProjectId', pm.variables.replaceIn('{{$guid}}')); ['g4_blockedProjectId','g4_archivedProjectId','g4_softDeletedProjectId','g4_emptyProjectId','g4_controlProjectId','g4_blockedTodoId','g4_blockedDoneId','g4_blockerId','g4_softDeletedBlockerId','g4_archivedTaskId','g4_archivedLastPage','g4_activeLastPage','g4_emptyName','g4_emptyOwnerId','g4_emptyCreatedAt'].forEach(k => pm.collectionVariables.unset(k));",
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Test run initialized\", function () { pm.expect(pm.collectionVariables.get('g4_runTag')).to.be.a('string').and.not.empty; pm.expect(pm.collectionVariables.get('g4_missingProjectId')).to.match(/^[a-f0-9-]{36}$/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Blocked project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VALUM-G4-Blocked-{{g4_runTag}}\",\n  \"description\": \"RN-02 active InProgress blocking and then allowed\",\n  \"ownerId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {const p=pm.response.json(); if (typeof p.id === 'string') pm.collectionVariables.set('g4_blockedProjectId',p.id); }",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Project created Active with fresh identifier\", function () { const p=pm.response.json(); pm.expect(p.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(p.status).to.eql(0); pm.expect(p.name).to.include('VALUM-G4-Blocked-'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Archived project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VALUM-G4-Archived-{{g4_runTag}}\",\n  \"description\": \"RN-01 archived tasks and archive idempotency\",\n  \"ownerId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {const p=pm.response.json(); if (typeof p.id === 'string') pm.collectionVariables.set('g4_archivedProjectId',p.id); }",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Project created Active with fresh identifier\", function () { const p=pm.response.json(); pm.expect(p.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(p.status).to.eql(0); pm.expect(p.name).to.include('VALUM-G4-Archived-'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create SoftDeleted project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VALUM-G4-SoftDeleted-{{g4_runTag}}\",\n  \"description\": \"RN-02 soft-deleted InProgress does not block\",\n  \"ownerId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {const p=pm.response.json(); if (typeof p.id === 'string') pm.collectionVariables.set('g4_softDeletedProjectId',p.id); }",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Project created Active with fresh identifier\", function () { const p=pm.response.json(); pm.expect(p.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(p.status).to.eql(0); pm.expect(p.name).to.include('VALUM-G4-SoftDeleted-'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Empty project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VALUM-G4-Empty-{{g4_runTag}}\",\n  \"description\": \"Archive with zero tasks and preserve project metadata\",\n  \"ownerId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {const p=pm.response.json(); if (typeof p.id === 'string') pm.collectionVariables.set('g4_emptyProjectId',p.id); pm.collectionVariables.set(\"g4_emptyName\",p.name); pm.collectionVariables.set(\"g4_emptyOwnerId\",p.ownerId); pm.collectionVariables.set(\"g4_emptyCreatedAt\",p.createdAt); }",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Project created Active with fresh identifier\", function () { const p=pm.response.json(); pm.expect(p.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(p.status).to.eql(0); pm.expect(p.name).to.include('VALUM-G4-Empty-'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Control project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VALUM-G4-Control-{{g4_runTag}}\",\n  \"description\": \"Control Active project remains untouched\",\n  \"ownerId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {const p=pm.response.json(); if (typeof p.id === 'string') pm.collectionVariables.set('g4_controlProjectId',p.id); }",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Project created Active with fresh identifier\", function () { const p=pm.response.json(); pm.expect(p.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(p.status).to.eql(0); pm.expect(p.name).to.include('VALUM-G4-Control-'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — RN-02 bloquea un proyecto activo",
+      "description": "Active project with Todo, Done and InProgress; archive must return 422 and preserve Active until blocker is resolved.",
+      "item": [
+        {
+          "name": "06 — Create Todo task on blocked project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Todo-{{g4_runTag}}\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===201) {const t=pm.response.json(); if(typeof t.id === \"string\") pm.collectionVariables.set(\"g4_blockedTodoId\",t.id);}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Task is initially Todo and linked to correct project\", function () { const t=pm.response.json(); pm.expect(t.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(t.projectId.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_blockedProjectId\").toLowerCase()); pm.expect(t.status).to.eql(0); pm.expect(t.completedAt).to.be.null; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — Create task to mark Done",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Completed-{{g4_runTag}}\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===201) {const t=pm.response.json(); if(typeof t.id === \"string\") pm.collectionVariables.set(\"g4_blockedDoneId\",t.id);}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Task is initially Todo and linked to correct project\", function () { const t=pm.response.json(); pm.expect(t.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(t.projectId.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_blockedProjectId\").toLowerCase()); pm.expect(t.status).to.eql(0); pm.expect(t.completedAt).to.be.null; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 — Transition second task to Done",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_blockedDoneId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 — Create task to block archiving",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Blocker-{{g4_runTag}}\",\n  \"priority\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===201) {const t=pm.response.json(); if(typeof t.id === \"string\") pm.collectionVariables.set(\"g4_blockerId\",t.id);}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Task is initially Todo and linked to correct project\", function () { const t=pm.response.json(); pm.expect(t.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(t.projectId.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_blockedProjectId\").toLowerCase()); pm.expect(t.status).to.eql(0); pm.expect(t.completedAt).to.be.null; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 — Move blocker to InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_blockerId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 — RN-02 reject archiving Active project with InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"VALUM standard 422 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(422); pm.expect(e.error).to.eql(\"DomainException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 — Rejected archive persists Active and RN-05 summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_blockedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(0); pm.expect(s.totalTasks).to.eql(3); pm.expect(s.completedTasks).to.eql(1); pm.expect(s.inProgressTasks).to.eql(1); pm.expect(s.pendingTasks).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 — RN-06 task list filter status=1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/tasks?status=1"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Only non-deleted blocker in progress\", function () { const p=pm.response.json(); pm.expect(p.totalCount).to.eql(1); pm.expect(p.items).to.have.length(1); pm.expect(p.items[0].id.toLowerCase()).to.eql(pm.collectionVariables.get('g4_blockerId').toLowerCase()); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 — Resolve blocking task to Done",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_blockerId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 — Archive after resolving InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 — Archived project retains all three task counts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_blockedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(3); pm.expect(s.completedTasks).to.eql(2); pm.expect(s.inProgressTasks).to.eql(0); pm.expect(s.pendingTasks).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 — Repeat archive without blockers is 204",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — RN-02 y eliminación lógica",
+      "description": "A previously InProgress task is soft-deleted. Its physical row remains, but it must not block project archiving.",
+      "item": [
+        {
+          "name": "18 — Create task for soft-delete blocker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_softDeletedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"DeletedBlocker-{{g4_runTag}}\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===201) {const t=pm.response.json(); if(typeof t.id === \"string\") pm.collectionVariables.set(\"g4_softDeletedBlockerId\",t.id);}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Task is initially Todo and linked to correct project\", function () { const t=pm.response.json(); pm.expect(t.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(t.projectId.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_softDeletedProjectId\").toLowerCase()); pm.expect(t.status).to.eql(0); pm.expect(t.completedAt).to.be.null; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 — Move task to InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_softDeletedBlockerId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 — Soft-delete InProgress task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_softDeletedBlockerId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 — Archive succeeds despite soft-deleted InProgress",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_softDeletedProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 — Archived project summary excludes deleted task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_softDeletedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_softDeletedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(0); pm.expect(s.completedTasks).to.eql(0); pm.expect(s.inProgressTasks).to.eql(0); pm.expect(s.pendingTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 — Deleted task hidden by GET detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_softDeletedBlockerId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM standard 404 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(404); pm.expect(e.error).to.eql(\"NotFoundException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — RN-01 y estados de tareas tras archivar",
+      "description": "Existing tasks can be read, changed and soft-deleted. Creating new tasks is prohibited. Repeating archive remains 204 even after a task becomes InProgress.",
+      "item": [
+        {
+          "name": "24 — Create existing task before archiving",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"ExistingAfterArchive-{{g4_runTag}}\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===201) {const t=pm.response.json(); if(typeof t.id === \"string\") pm.collectionVariables.set(\"g4_archivedTaskId\",t.id);}",
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Task is initially Todo and linked to correct project\", function () { const t=pm.response.json(); pm.expect(t.id).to.match(/^[a-f0-9-]{36}$/i); pm.expect(t.projectId.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_archivedProjectId\").toLowerCase()); pm.expect(t.status).to.eql(0); pm.expect(t.completedAt).to.be.null; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "25 — Archive project with existing Todo task",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "26 — Archived project initially has one pending task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_archivedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(1); pm.expect(s.completedTasks).to.eql(0); pm.expect(s.inProgressTasks).to.eql(0); pm.expect(s.pendingTasks).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27 — RN-01 reject NEW task on archived project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"MustNotExist-{{g4_runTag}}\",\n  \"priority\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"VALUM standard 422 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(422); pm.expect(e.error).to.eql(\"DomainException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "28 — Existing task remains readable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Existing Todo task not blocked by archive\", function () { const t=pm.response.json(); pm.expect(t.id.toLowerCase()).to.eql(pm.collectionVariables.get('g4_archivedTaskId').toLowerCase()); pm.expect(t.status).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29 — Existing task remains in archived project list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}/tasks"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Archived task list contains previously created task\", function () { const p=pm.response.json(); pm.expect(p.totalCount).to.eql(1); pm.expect(p.items[0].id.toLowerCase()).to.eql(pm.collectionVariables.get('g4_archivedTaskId').toLowerCase()); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "30 — Existing task can transition to InProgress after archive",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "31 — Archived project RN-05 summary reflects InProgress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_archivedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(1); pm.expect(s.completedTasks).to.eql(0); pm.expect(s.inProgressTasks).to.eql(1); pm.expect(s.pendingTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "32 — CRITICAL regression: Already Archived + InProgress => 204",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "33 — Repeated archive must NOT reset task or project",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_archivedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(1); pm.expect(s.completedTasks).to.eql(0); pm.expect(s.inProgressTasks).to.eql(1); pm.expect(s.pendingTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "34 — RN-03 existing archived task can transition to Done",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "35 — RN-03 verify CompletedAt assigned UTC",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Status Done with real UTC completion timestamp\", function () { const t=pm.response.json(); pm.expect(t.status).to.eql(2); pm.expect(t.completedAt).to.be.a('string').and.match(/Z$/); const n=Date.parse(t.completedAt); pm.expect(Number.isNaN(n)).to.eql(false); pm.expect(n).to.be.at.most(Date.now()+30000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "36 — RN-05 summary shows completed task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_archivedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(1); pm.expect(s.completedTasks).to.eql(1); pm.expect(s.inProgressTasks).to.eql(0); pm.expect(s.pendingTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "37 — Move Done to Todo inside archived project",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "38 — CompletedAt cleared after leaving Done",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Todo and CompletedAt cleared\", function () { const t=pm.response.json(); pm.expect(t.status).to.eql(0); pm.expect(t.completedAt).to.be.null; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "39 — RN-04 DELETE existing archived task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "40 — RN-04 repeated DELETE remains 204",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "41 — Deleted archived task is absent from detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks/{{g4_archivedTaskId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM standard 404 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(404); pm.expect(e.error).to.eql(\"NotFoundException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42 — Archived project RN-05 excludes deleted task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_archivedProjectId\").toLowerCase()); pm.expect(p.status).to.eql(1); pm.expect(s.totalTasks).to.eql(0); pm.expect(s.completedTasks).to.eql(0); pm.expect(s.inProgressTasks).to.eql(0); pm.expect(s.pendingTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "43 — RN-01 still rejects creation after delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{g4_archivedProjectId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"StillForbidden-{{g4_runTag}}\",\n  \"priority\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"VALUM standard 422 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(422); pm.expect(e.error).to.eql(\"DomainException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Archivado vacío y metadatos",
+      "description": "An Active project with no tasks is archived and repeated PATCH leaves all originally created project fields unchanged.",
+      "item": [
+        {
+          "name": "44 — Archive empty project successfully",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_emptyProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "45 — Archive same empty project again (idempotent)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_emptyProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+                  "pm.test(\"204 has empty response body\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "46 — Project metadata unchanged by archiving",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_emptyProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Status Archived and original metadata preserved\", function () { const b=pm.response.json(); const p=b.project; pm.expect(p.status).to.eql(1); pm.expect(p.name).to.eql(pm.collectionVariables.get('g4_emptyName')); pm.expect(p.ownerId.toLowerCase()).to.eql(pm.collectionVariables.get('g4_emptyOwnerId').toLowerCase()); pm.expect(p.createdAt).to.eql(pm.collectionVariables.get('g4_emptyCreatedAt')); pm.expect(b.summary.totalTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "47 — Control project is still Active",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_controlProjectId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Project status and RN-05 task counts are correct\", function () { const b=pm.response.json(); const p=b.project, s=b.summary; pm.expect(p.id.toLowerCase()).to.eql(pm.collectionVariables.get(\"g4_controlProjectId\").toLowerCase()); pm.expect(p.status).to.eql(0); pm.expect(s.totalTasks).to.eql(0); pm.expect(s.completedTasks).to.eql(0); pm.expect(s.inProgressTasks).to.eql(0); pm.expect(s.pendingTasks).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Errores, filtros y paginación (RN-06)",
+      "description": "Input errors must use VALUM JSON contract. Project status list filters and task pagination continue to work after multiple archives; checks robust to existing isolated DB data from prior runs.",
+      "item": [
+        {
+          "name": "48 — Archive malformed GUID => 400",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/not-a-guid/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM standard 400 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(400); pm.expect(e.error).to.eql(\"ValidationException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "49 — Archive Guid.Empty => 400",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/00000000-0000-0000-0000-000000000000/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM standard 400 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(400); pm.expect(e.error).to.eql(\"ValidationException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "50 — Archive unknown valid GUID => 404",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_missingProjectId}}/archive"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"VALUM standard 404 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(404); pm.expect(e.error).to.eql(\"NotFoundException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "51 — RN-06 archived status filtered first page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=1&page=1&pageSize=50"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"PagedResult only contains archived projects; capture last page\", function () { const p=pm.response.json(); pm.expect(p.page).to.eql(1); pm.expect(p.pageSize).to.eql(50); pm.expect(p.items).to.be.an('array'); pm.expect(p.totalCount).to.be.at.least(4); pm.expect(p.totalPages).to.be.at.least(1); p.items.forEach(x=>pm.expect(x.status).to.eql(1)); pm.collectionVariables.set('g4_archivedLastPage',String(p.totalPages)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "52 — RN-06 archived project appears in latest page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=1&page={{g4_archivedLastPage}}&pageSize=50"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Newest archived project is included in status=1\", function () { const p=pm.response.json(); pm.expect(p.items.map(x=>x.id.toLowerCase())).to.include(pm.collectionVariables.get('g4_emptyProjectId').toLowerCase()); p.items.forEach(x=>pm.expect(x.status).to.eql(1)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "53 — RN-06 Active status filtered first page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=0&page=1&pageSize=50"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Only Active; last page captured\", function () { const p=pm.response.json(); pm.expect(p.items).to.be.an('array'); pm.expect(p.totalPages).to.be.at.least(1); p.items.forEach(x=>pm.expect(x.status).to.eql(0)); pm.collectionVariables.set('g4_activeLastPage',String(p.totalPages)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "54 — RN-06 control project appears in latest Active page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=0&page={{g4_activeLastPage}}&pageSize=50"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Control remains among Active projects\", function () { const p=pm.response.json(); pm.expect(p.items.map(x=>x.id.toLowerCase())).to.include(pm.collectionVariables.get('g4_controlProjectId').toLowerCase()); p.items.forEach(x=>pm.expect(x.status).to.eql(0)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "55 — RN-06 task paging and Done status after archive",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/tasks?status=2&page=1&pageSize=2"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Done filter paginated: 2 done tasks\", function () { const p=pm.response.json(); pm.expect(p.page).to.eql(1); pm.expect(p.pageSize).to.eql(2); pm.expect(p.totalCount).to.eql(2); pm.expect(p.items).to.have.length(2); p.items.forEach(x=>pm.expect(x.status).to.eql(2)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "56 — RN-06 pagination rejects page=0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?page=0"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM standard 400 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(400); pm.expect(e.error).to.eql(\"ValidationException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "57 — RN-06 pagination rejects pageSize=51",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?pageSize=51"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM standard 400 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(400); pm.expect(e.error).to.eql(\"ValidationException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "58 — RN-06 task paging rejects pageSize=51",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{g4_blockedProjectId}}/tasks?pageSize=51"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"VALUM standard 400 error schema\", function () { const e = pm.response.json(); pm.expect(e.status).to.eql(400); pm.expect(e.error).to.eql(\"ValidationException\"); pm.expect(e.message).to.be.a(\"string\").and.not.empty; pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4596",
+      "type": "string"
+    },
+    {
+      "key": "g4_runTag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_blockedProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_archivedProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_softDeletedProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_emptyProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_controlProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_blockedTodoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_blockedDoneId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_blockerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_softDeletedBlockerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_archivedTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_missingProjectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_archivedLastPage",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_activeLastPage",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_emptyName",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_emptyOwnerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "g4_emptyCreatedAt",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

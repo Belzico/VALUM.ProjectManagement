@@ -61,5 +61,11 @@ namespace VALUM.Infrastructure.Projects
         {
             return await _context.Projects.AnyAsync(p => p.Id == id);
         }
+
+        public async Task UpdateAsync(Project project)
+        {
+            _context.Projects.Update(project);
+            await _context.SaveChangesAsync();
+        }
     }
 }
