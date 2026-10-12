@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using VALUM.Application.Exceptions;
 using VALUM.Application.Tasks.Commands;
@@ -22,7 +23,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             
             mockTaskRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((TaskItem?)null);
             
-            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object);
+            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object, NullLogger<UpdateTaskStatusCommandHandler>.Instance);
             var command = new UpdateTaskStatusCommand { Id = Guid.NewGuid(), Status = VALUM.Domain.Enums.TaskStatus.Done };
 
             // Act & Assert
@@ -38,7 +39,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             var task = new TaskItem { Id = Guid.NewGuid(), IsDeleted = true };
             mockTaskRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(task);
             
-            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object);
+            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object, NullLogger<UpdateTaskStatusCommandHandler>.Instance);
             var command = new UpdateTaskStatusCommand { Id = task.Id, Status = VALUM.Domain.Enums.TaskStatus.Done };
 
             // Act & Assert
@@ -55,7 +56,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             mockTaskRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(task);
             mockTaskRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
             
-            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object);
+            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object, NullLogger<UpdateTaskStatusCommandHandler>.Instance);
             var command = new UpdateTaskStatusCommand { Id = task.Id, Status = VALUM.Domain.Enums.TaskStatus.Todo };
 
             // Act & Assert
@@ -73,7 +74,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             mockTaskRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(task);
             mockTaskRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
             
-            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object);
+            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object, NullLogger<UpdateTaskStatusCommandHandler>.Instance);
             var command = new UpdateTaskStatusCommand { Id = task.Id, Status = VALUM.Domain.Enums.TaskStatus.Done };
 
             // Act
@@ -94,7 +95,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             mockTaskRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(task);
             mockTaskRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
             
-            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object);
+            var handler = new UpdateTaskStatusCommandHandler(mockTaskRepo.Object, NullLogger<UpdateTaskStatusCommandHandler>.Instance);
             var command = new UpdateTaskStatusCommand { Id = task.Id, Status = VALUM.Domain.Enums.TaskStatus.Todo };
 
             // Act

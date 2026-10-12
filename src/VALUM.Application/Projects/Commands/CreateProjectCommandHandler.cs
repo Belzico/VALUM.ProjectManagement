@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using VALUM.Application.Projects.DTOs;
 using VALUM.Domain.Entities;
 
@@ -10,10 +11,12 @@ namespace VALUM.Application.Projects.Commands
     public class CreateProjectCommandHandler : IRequestHandler<CreateProjectCommand, ProjectDto>
     {
         private readonly IProjectRepository _repository;
+        private readonly ILogger<CreateProjectCommandHandler> _logger;
 
-        public CreateProjectCommandHandler(IProjectRepository repository)
+        public CreateProjectCommandHandler(IProjectRepository repository, ILogger<CreateProjectCommandHandler> logger)
         {
             _repository = repository;
+            _logger = logger;
         }
 
         public async Task<ProjectDto> Handle(CreateProjectCommand request, CancellationToken cancellationToken)
@@ -29,6 +32,11 @@ namespace VALUM.Application.Projects.Commands
             };
 
             await _repository.AddAsync(project);
+
+            _logger.LogInformation(
+                "Project created. Operation: {Operation}, ProjectId: {ProjectId}",
+                "CreateProject",
+                project.Id);
 
             return new ProjectDto
             {

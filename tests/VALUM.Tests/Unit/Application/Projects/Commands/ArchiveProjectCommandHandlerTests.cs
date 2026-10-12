@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using VALUM.Application.Exceptions;
 using VALUM.Application.Projects.Commands;
@@ -24,7 +25,7 @@ namespace VALUM.Tests.Unit.Application.Projects.Commands
             
             mockProjectRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Project?)null);
             
-            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object);
+            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object, NullLogger<ArchiveProjectCommandHandler>.Instance);
             var command = new ArchiveProjectCommand { Id = Guid.NewGuid() };
 
             // Act & Assert
@@ -45,7 +46,7 @@ namespace VALUM.Tests.Unit.Application.Projects.Commands
             mockProjectRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(project);
             mockTaskRepo.Setup(r => r.HasActiveInProgressTasksAsync(It.IsAny<Guid>())).ReturnsAsync(true);
             
-            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object);
+            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object, NullLogger<ArchiveProjectCommandHandler>.Instance);
             var command = new ArchiveProjectCommand { Id = project.Id };
 
             // Act & Assert
@@ -67,7 +68,7 @@ namespace VALUM.Tests.Unit.Application.Projects.Commands
             mockTaskRepo.Setup(r => r.HasActiveInProgressTasksAsync(It.IsAny<Guid>())).ReturnsAsync(false);
             mockProjectRepo.Setup(r => r.UpdateAsync(It.IsAny<Project>())).Returns(Task.CompletedTask);
             
-            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object);
+            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object, NullLogger<ArchiveProjectCommandHandler>.Instance);
             var command = new ArchiveProjectCommand { Id = project.Id };
 
             // Act
@@ -90,7 +91,7 @@ namespace VALUM.Tests.Unit.Application.Projects.Commands
             mockTaskRepo.Setup(r => r.HasActiveInProgressTasksAsync(It.IsAny<Guid>())).ReturnsAsync(false);
             mockProjectRepo.Setup(r => r.UpdateAsync(It.IsAny<Project>())).Returns(Task.CompletedTask);
             
-            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object);
+            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object, NullLogger<ArchiveProjectCommandHandler>.Instance);
             var command = new ArchiveProjectCommand { Id = project.Id };
 
             // Act
@@ -115,7 +116,7 @@ namespace VALUM.Tests.Unit.Application.Projects.Commands
             mockTaskRepo.Setup(r => r.HasActiveInProgressTasksAsync(It.IsAny<Guid>())).ReturnsAsync(true);
             mockProjectRepo.Setup(r => r.UpdateAsync(It.IsAny<Project>())).Returns(Task.CompletedTask);
             
-            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object);
+            var handler = new ArchiveProjectCommandHandler(mockProjectRepo.Object, mockTaskRepo.Object, NullLogger<ArchiveProjectCommandHandler>.Instance);
             var command = new ArchiveProjectCommand { Id = project.Id };
 
             // Act

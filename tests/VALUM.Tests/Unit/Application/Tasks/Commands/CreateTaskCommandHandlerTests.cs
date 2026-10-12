@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using VALUM.Application.Exceptions;
 using VALUM.Application.Tasks.Commands;
@@ -24,7 +25,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             
             mockProjectRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Project?)null);
             
-            var handler = new CreateTaskCommandHandler(mockTaskRepo.Object, mockProjectRepo.Object);
+            var handler = new CreateTaskCommandHandler(mockTaskRepo.Object, mockProjectRepo.Object, NullLogger<CreateTaskCommandHandler>.Instance);
             var command = new CreateTaskCommand { ProjectId = Guid.NewGuid(), Title = "Test", Priority = TaskPriority.Medium };
 
             // Act & Assert
@@ -42,7 +43,7 @@ namespace VALUM.Tests.Unit.Application.Tasks.Commands
             mockProjectRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(project);
             mockTaskRepo.Setup(r => r.IsProjectArchivedAsync(It.IsAny<Guid>())).ReturnsAsync(true);
             
-            var handler = new CreateTaskCommandHandler(mockTaskRepo.Object, mockProjectRepo.Object);
+            var handler = new CreateTaskCommandHandler(mockTaskRepo.Object, mockProjectRepo.Object, NullLogger<CreateTaskCommandHandler>.Instance);
             var command = new CreateTaskCommand { ProjectId = project.Id, Title = "Test", Priority = TaskPriority.Medium };
 
             // Act & Assert

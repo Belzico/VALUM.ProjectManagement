@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using VALUM.Domain.Exceptions;
 using VALUM.Application.Exceptions;
 using VALUM.Domain.Enums;
@@ -11,10 +12,12 @@ namespace VALUM.Application.Tasks.Commands
     public class UpdateTaskStatusCommandHandler : IRequestHandler<UpdateTaskStatusCommand>
     {
         private readonly ITaskRepository _taskRepository;
+        private readonly ILogger<UpdateTaskStatusCommandHandler> _logger;
 
-        public UpdateTaskStatusCommandHandler(ITaskRepository taskRepository)
+        public UpdateTaskStatusCommandHandler(ITaskRepository taskRepository, ILogger<UpdateTaskStatusCommandHandler> logger)
         {
             _taskRepository = taskRepository;
+            _logger = logger;
         }
 
         public async Task Handle(UpdateTaskStatusCommand request, CancellationToken cancellationToken)
@@ -26,9 +29,17 @@ namespace VALUM.Application.Tasks.Commands
                 throw new NotFoundException();
             }
 
+            var previousStatus = task.Status;
+
             // RN-03: Repeating the current status must return 422
             if (task.Status == request.Status)
             {
+                _logger.LogWarning(
+                    "Business rule violation. Operation: {Operation}, ResourceType: {ResourceType}, TaskId: {TaskId}, FailureCategory: {FailureCategory}",
+                    "UpdateTaskStatus",
+                    "Task",
+                    task.Id,
+                    "SameStatus");
                 throw new DomainException("Task is already in the requested status.");
             }
 
@@ -51,6 +62,13 @@ namespace VALUM.Application.Tasks.Commands
             task.Status = request.Status;
 
             await _taskRepository.UpdateAsync(task);
+
+            _logger.LogInformation(
+                "Task status updated. Operation: {Operation}, TaskId: {TaskId}, PreviousStatus: {PreviousStatus}, NewStatus: {NewStatus}",
+                "UpdateTaskStatus",
+                task.Id,
+                previousStatus,
+                task.Status);
         }
     }
 }

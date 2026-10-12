@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using VALUM.Application.Exceptions;
 
 namespace VALUM.Application.Tasks.Commands
@@ -9,10 +10,12 @@ namespace VALUM.Application.Tasks.Commands
     public class DeleteTaskCommandHandler : IRequestHandler<DeleteTaskCommand>
     {
         private readonly ITaskRepository _taskRepository;
+        private readonly ILogger<DeleteTaskCommandHandler> _logger;
 
-        public DeleteTaskCommandHandler(ITaskRepository taskRepository)
+        public DeleteTaskCommandHandler(ITaskRepository taskRepository, ILogger<DeleteTaskCommandHandler> logger)
         {
             _taskRepository = taskRepository;
+            _logger = logger;
         }
 
         public async Task Handle(DeleteTaskCommand request, CancellationToken cancellationToken)
@@ -31,6 +34,11 @@ namespace VALUM.Application.Tasks.Commands
             {
                 task.IsDeleted = true;
                 await _taskRepository.UpdateAsync(task);
+
+                _logger.LogInformation(
+                    "Task soft-deleted. Operation: {Operation}, TaskId: {TaskId}",
+                    "DeleteTask",
+                    task.Id);
             }
             // If already soft-deleted, do nothing (idempotent)
         }

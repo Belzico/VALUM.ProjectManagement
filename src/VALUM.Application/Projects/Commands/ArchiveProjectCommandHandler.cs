@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using VALUM.Application.Exceptions;
 using VALUM.Application.Projects;
 using VALUM.Application.Tasks;
@@ -14,11 +15,13 @@ namespace VALUM.Application.Projects.Commands
     {
         private readonly IProjectRepository _projectRepository;
         private readonly ITaskRepository _taskRepository;
+        private readonly ILogger<ArchiveProjectCommandHandler> _logger;
 
-        public ArchiveProjectCommandHandler(IProjectRepository projectRepository, ITaskRepository taskRepository)
+        public ArchiveProjectCommandHandler(IProjectRepository projectRepository, ITaskRepository taskRepository, ILogger<ArchiveProjectCommandHandler> logger)
         {
             _projectRepository = projectRepository;
             _taskRepository = taskRepository;
+            _logger = logger;
         }
 
         public async Task Handle(ArchiveProjectCommand request, CancellationToken cancellationToken)
@@ -39,12 +42,23 @@ namespace VALUM.Application.Projects.Commands
             // RN-02: Cannot archive project with nondeleted InProgress tasks
             if (await _taskRepository.HasActiveInProgressTasksAsync(request.Id))
             {
+                _logger.LogWarning(
+                    "Business rule violation. Operation: {Operation}, ResourceType: {ResourceType}, ProjectId: {ProjectId}, FailureCategory: {FailureCategory}",
+                    "ArchiveProject",
+                    "Project",
+                    request.Id,
+                    "TasksInProgress");
                 throw new DomainException("Cannot archive a project with tasks in progress.");
             }
 
             // Archive the project
             project.Status = ProjectStatus.Archived;
             await _projectRepository.UpdateAsync(project);
+
+            _logger.LogInformation(
+                "Project archived. Operation: {Operation}, ProjectId: {ProjectId}",
+                "ArchiveProject",
+                project.Id);
         }
     }
 }

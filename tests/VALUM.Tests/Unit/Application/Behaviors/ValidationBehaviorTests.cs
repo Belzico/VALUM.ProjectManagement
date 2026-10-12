@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
 using MediatR;
-using Moq;
 using Xunit;
 
 namespace VALUM.Tests.Unit.Application.Behaviors

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using VALUM.Application.Exceptions;
 using VALUM.Application.Tasks.DTOs;
 using VALUM.Domain.Entities;
@@ -15,11 +16,13 @@ namespace VALUM.Application.Tasks.Commands
     {
         private readonly ITaskRepository _taskRepository;
         private readonly IProjectRepository _projectRepository;
+        private readonly ILogger<CreateTaskCommandHandler> _logger;
 
-        public CreateTaskCommandHandler(ITaskRepository taskRepository, IProjectRepository projectRepository)
+        public CreateTaskCommandHandler(ITaskRepository taskRepository, IProjectRepository projectRepository, ILogger<CreateTaskCommandHandler> logger)
         {
             _taskRepository = taskRepository;
             _projectRepository = projectRepository;
+            _logger = logger;
         }
 
         public async Task<TaskDto> Handle(CreateTaskCommand request, CancellationToken cancellationToken)
@@ -34,6 +37,12 @@ namespace VALUM.Application.Tasks.Commands
             // RN-01: Cannot create task under archived project
             if (await _taskRepository.IsProjectArchivedAsync(request.ProjectId))
             {
+                _logger.LogWarning(
+                    "Business rule violation. Operation: {Operation}, ResourceType: {ResourceType}, ProjectId: {ProjectId}, FailureCategory: {FailureCategory}",
+                    "CreateTask",
+                    "Project",
+                    request.ProjectId,
+                    "ArchivedProject");
                 throw new DomainException("Cannot create a task under an archived project.");
             }
 
@@ -52,6 +61,12 @@ namespace VALUM.Application.Tasks.Commands
             };
 
             await _taskRepository.AddAsync(task);
+
+            _logger.LogInformation(
+                "Task created. Operation: {Operation}, TaskId: {TaskId}, ProjectId: {ProjectId}",
+                "CreateTask",
+                task.Id,
+                task.ProjectId);
 
             return new TaskDto
             {
