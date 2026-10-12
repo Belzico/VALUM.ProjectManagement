@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Linq;
 using VALUM.Application;
 using VALUM.Infrastructure;
 using VALUM.Infrastructure.Persistence;
@@ -16,7 +18,27 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 // Register controllers
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(e => e.Value?.Errors.Count > 0)
+                .Select(e => new { field = e.Key, message = e.Value!.Errors.First().ErrorMessage })
+                .ToArray();
+
+            var payload = new
+            {
+                status = 400,
+                error = "ValidationException",
+                message = "One or more validation failures have occurred.",
+                details = errors
+            };
+
+            return new BadRequestObjectResult(payload);
+        };
+    });
 
 // Register application services (MediatR, FluentValidation, pipeline behaviors)
 builder.Services.AddApplication();

@@ -14,6 +14,9 @@ namespace VALUM.Infrastructure
 
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
 
+            // Application repositories
+            services.AddScoped<VALUM.Application.Projects.IProjectRepository, VALUM.Infrastructure.Projects.ProjectRepository>();
+
             return services;
         }
     }

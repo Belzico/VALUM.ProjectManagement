@@ -1,0 +1,1133 @@
+{
+  "info": {
+    "_postman_id": "9bfd5d3d-171c-4c67-9306-9eebbe22fd7e",
+    "name": "VALUM API — Projects | Grupo 2",
+    "description": "Independent acceptance tests for VALUM Group 2. Run in order using Collection Runner against a disposable development SQLite database. Creates several projects; never run against production. Open the README for setup and limitations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 — Create & validation (POST)",
+      "item": [
+        {
+          "name": "01 Create primary project — 201 + save projectId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{projectName}}\",\n  \"description\": \"Created by Postman acceptance suite\",\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"projectName\", \"{{runTag}}-Main\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const p = pm.response.json();",
+                  "pm.test(\"Created project contract\", () => {",
+                  " pm.expect(p.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+                  " pm.expect(p.name).to.eql(pm.variables.replaceIn(\"{{projectName}}\"));",
+                  " pm.expect(p.ownerId.toLowerCase()).to.eql(pm.environment.get(\"ownerId\").toLowerCase());",
+                  " pm.expect(p.status).to.eql(0);",
+                  " pm.expect(new Date(p.createdAt).toString()).not.to.eql(\"Invalid Date\");",
+                  "});",
+                  "pm.test(\"Location identifies created project\", () => {",
+                  " const location=pm.response.headers.get(\"Location\") || \"\";",
+                  " pm.expect(location).to.include(\"/api/projects/\"+p.id);",
+                  "});",
+                  "pm.environment.set(\"projectId\",p.id);",
+                  "pm.environment.set(\"projectNameActual\",p.name);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Create second project — 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{runTag}}-Second\",\n  \"description\": \"Created by Postman acceptance suite\",\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const p = pm.response.json();",
+                  "pm.test(\"Second project ID is distinct\", () => pm.expect(p.id).not.to.eql(pm.environment.get(\"projectId\")));",
+                  "pm.environment.set(\"projectId2\",p.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Name exactly 80 chars — 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{boundaryName}}\",\n  \"description\": \"Created by Postman acceptance suite\",\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"boundaryName\", \"N\".repeat(80));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const p=pm.response.json();",
+                  "pm.test(\"Name preserves 80 chars\", () => pm.expect(p.name.length).to.eql(80));",
+                  "pm.environment.set(\"projectId80\",p.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Empty name — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"Created by Postman acceptance suite\",\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field Name\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Whitespace name — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"   \",\n  \"description\": \"Created by Postman acceptance suite\",\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field Name\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Name 81 chars — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{tooLongName}}\",\n  \"description\": \"Created by Postman acceptance suite\",\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"tooLongName\", \"N\".repeat(81));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field Name\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"name\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Empty ownerId GUID — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"{{runTag}}-BadOwner\",\"ownerId\":\"00000000-0000-0000-0000-000000000000\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field OwnerId\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"ownerid\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 Missing name — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"description\":\"Missing name\",\"ownerId\":\"{{ownerId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 Description null — 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{runTag}}-NullDescription\",\n  \"description\": null,\n  \"ownerId\": \"{{ownerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const p=pm.response.json();",
+                  "pm.test(\"Description null accepted\", () => pm.expect(p.description).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Malformed JSON — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"broken\", \"ownerId\":",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 OwnerId malformed — 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Invalid owner\",\"ownerId\":\"not-a-guid\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — List, filters & pagination (GET)",
+      "item": [
+        {
+          "name": "01 Default list — 200 + metadata",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Paged result contract\", () => {",
+                  " pm.expect(data.items).to.be.an(\"array\");",
+                  " for (const k of [\"page\",\"pageSize\",\"totalCount\",\"totalPages\"]) pm.expect(data[k]).to.be.a(\"number\");",
+                  " for (const k of [\"hasPrevious\",\"hasNext\"]) pm.expect(data[k]).to.be.a(\"boolean\");",
+                  " pm.expect(data.totalPages).to.eql(Math.ceil(data.totalCount / data.pageSize));",
+                  " pm.expect(data.hasPrevious).to.eql(data.page > 1);",
+                  " pm.expect(data.hasNext).to.eql(data.page < data.totalPages);",
+                  " pm.expect(data.items.length).to.be.at.most(data.pageSize);",
+                  "});",
+                  "pm.test(\"Defaults and created project visible\", () => {",
+                  " pm.expect(data.page).to.eql(1);pm.expect(data.pageSize).to.eql(10);",
+                  " pm.expect(data.totalCount).to.be.at.least(4);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Active filter — 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=0&page=1&pageSize=50",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Paged result contract\", () => {",
+                  " pm.expect(data.items).to.be.an(\"array\");",
+                  " for (const k of [\"page\",\"pageSize\",\"totalCount\",\"totalPages\"]) pm.expect(data[k]).to.be.a(\"number\");",
+                  " for (const k of [\"hasPrevious\",\"hasNext\"]) pm.expect(data[k]).to.be.a(\"boolean\");",
+                  " pm.expect(data.totalPages).to.eql(Math.ceil(data.totalCount / data.pageSize));",
+                  " pm.expect(data.hasPrevious).to.eql(data.page > 1);",
+                  " pm.expect(data.hasNext).to.eql(data.page < data.totalPages);",
+                  " pm.expect(data.items.length).to.be.at.most(data.pageSize);",
+                  "});",
+                  "pm.test(\"Only Active\", () => data.items.forEach(p => pm.expect(p.status).to.eql(0)));",
+                  "pm.test(\"At least primary project is Active\", () => pm.expect(data.totalCount).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Archived filter — 200 (may be empty)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=1&page=1&pageSize=50",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Paged result contract\", () => {",
+                  " pm.expect(data.items).to.be.an(\"array\");",
+                  " for (const k of [\"page\",\"pageSize\",\"totalCount\",\"totalPages\"]) pm.expect(data[k]).to.be.a(\"number\");",
+                  " for (const k of [\"hasPrevious\",\"hasNext\"]) pm.expect(data[k]).to.be.a(\"boolean\");",
+                  " pm.expect(data.totalPages).to.eql(Math.ceil(data.totalCount / data.pageSize));",
+                  " pm.expect(data.hasPrevious).to.eql(data.page > 1);",
+                  " pm.expect(data.hasNext).to.eql(data.page < data.totalPages);",
+                  " pm.expect(data.items.length).to.be.at.most(data.pageSize);",
+                  "});",
+                  "pm.test(\"Only Archived\", () => data.items.forEach(p => pm.expect(p.status).to.eql(1)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Page 2, pageSize 1 — 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?page=2&pageSize=1",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Paged result contract\", () => {",
+                  " pm.expect(data.items).to.be.an(\"array\");",
+                  " for (const k of [\"page\",\"pageSize\",\"totalCount\",\"totalPages\"]) pm.expect(data[k]).to.be.a(\"number\");",
+                  " for (const k of [\"hasPrevious\",\"hasNext\"]) pm.expect(data[k]).to.be.a(\"boolean\");",
+                  " pm.expect(data.totalPages).to.eql(Math.ceil(data.totalCount / data.pageSize));",
+                  " pm.expect(data.hasPrevious).to.eql(data.page > 1);",
+                  " pm.expect(data.hasNext).to.eql(data.page < data.totalPages);",
+                  " pm.expect(data.items.length).to.be.at.most(data.pageSize);",
+                  "});",
+                  "pm.test(\"Correct page\", () => {pm.expect(data.page).to.eql(2);pm.expect(data.pageSize).to.eql(1);pm.expect(data.hasPrevious).to.eql(true);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 pageSize 50 — 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?pageSize=50",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Paged result contract\", () => {",
+                  " pm.expect(data.items).to.be.an(\"array\");",
+                  " for (const k of [\"page\",\"pageSize\",\"totalCount\",\"totalPages\"]) pm.expect(data[k]).to.be.a(\"number\");",
+                  " for (const k of [\"hasPrevious\",\"hasNext\"]) pm.expect(data[k]).to.be.a(\"boolean\");",
+                  " pm.expect(data.totalPages).to.eql(Math.ceil(data.totalCount / data.pageSize));",
+                  " pm.expect(data.hasPrevious).to.eql(data.page > 1);",
+                  " pm.expect(data.hasNext).to.eql(data.page < data.totalPages);",
+                  " pm.expect(data.items.length).to.be.at.most(data.pageSize);",
+                  "});",
+                  "pm.test(\"Max pageSize accepted\", () => pm.expect(data.pageSize).to.eql(50));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 page 0 — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?page=0",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field Page\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"page\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 page -1 — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?page=-1",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field Page\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"page\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 pageSize 0 — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?pageSize=0",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field PageSize\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"pagesize\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 pageSize 51 — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?pageSize=51",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field PageSize\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"pagesize\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 page abc — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?page=abc",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field page\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"page\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 status invalid text — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=InvalidStatus",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field status\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"status\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 pageSize abc — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?pageSize=abc",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field pageSize\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"pagesize\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 status numeric 99 — expect 400 (independent acceptance)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects?status=99",
+            "description": "A valid enum should reject values outside {0,1}. This is an independent acceptance expectation; if it fails, inspect contract rather than weakening it."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field status\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"status\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Detail & summary (GET)",
+      "item": [
+        {
+          "name": "01 Primary project detail — 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{projectId}}",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Project detail and summary\", () => {",
+                  " pm.expect(data).to.have.all.keys(\"project\",\"summary\");",
+                  " pm.expect(data.project.id.toLowerCase()).to.eql(pm.environment.get(\"projectId\").toLowerCase());",
+                  " pm.expect(data.project.name).to.eql(pm.environment.get(\"projectNameActual\"));",
+                  " pm.expect(data.project.status).to.eql(0);",
+                  " for(const k of [\"totalTasks\",\"completedTasks\",\"inProgressTasks\",\"pendingTasks\"]){pm.expect(data.summary[k]).to.be.a(\"number\");pm.expect(data.summary[k]).to.eql(0);}",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Second project detail — 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{projectId2}}",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Right ID\", () => pm.expect(data.project.id.toLowerCase()).to.eql(pm.environment.get(\"projectId2\").toLowerCase()));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Missing valid GUID — 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/{{nonexistentProjectId}}",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 404, ERROR = \"NotFoundException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Empty GUID — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/00000000-0000-0000-0000-000000000000",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));",
+                  "pm.test(\"Error reports field Id\", () => {",
+                  "  const fields = pm.response.json().details.map(d => String(d.field || \"\").toLowerCase());",
+                  "  pm.expect(fields).to.include(\"id\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Malformed GUID — 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/projects/not-a-guid",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const STATUS = 400, ERROR = \"ValidationException\";",
+                  "const e = pm.response.json();",
+                  "pm.test(\"VALUM error contract\", () => {",
+                  "  pm.expect(e).to.be.an(\"object\");",
+                  "  pm.expect(Object.keys(e).sort()).to.eql([\"details\",\"error\",\"message\",\"status\"]);",
+                  "  pm.expect(e.status).to.eql(STATUS);",
+                  "  pm.expect(e.error).to.eql(ERROR);",
+                  "  pm.expect(e.message).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(e.details).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"HTTP status\", () => pm.response.to.have.status(STATUS));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get(\"ownerId\")) pm.environment.set(\"ownerId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+          "if (!pm.environment.get(\"runTag\")) pm.environment.set(\"runTag\", \"VALUM-\" + Date.now());"
+        ]
+      }
+    }
+  ],
+  "description": "This collection is designed from the independent VALUM contract report (Oct 12 2026). It intentionally expects status=99 to return 400 and may expose a missing enum validator. No task write endpoints exist yet; mixed task status and soft delete rely on xUnit integration tests. This suite INSERTS into the selected SQLite database. Use a dedicated disposable database and execute folders in order."
+}
