@@ -28,6 +28,11 @@ namespace VALUM.Api.Middleware
             }
             catch (Exception ex)
             {
+                // Skip GraphQL paths - GraphQL has its own error handling
+                if (context.Request.Path.StartsWithSegments("/graphql"))
+                {
+                    throw;
+                }
                 await HandleExceptionAsync(context, ex);
             }
         }

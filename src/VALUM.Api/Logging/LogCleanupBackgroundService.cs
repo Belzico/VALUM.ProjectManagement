@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Path = System.IO.Path;
 
 namespace VALUM.Api.Logging
 {

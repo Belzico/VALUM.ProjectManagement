@@ -8,6 +8,8 @@ using VALUM.Infrastructure;
 using VALUM.Infrastructure.Persistence;
 using VALUM.Api.Extensions;
 using VALUM.Api.Logging;
+using VALUM.Api.GraphQL;
+using VALUM.Api.GraphQL.Types;
 using Serilog;
 using Serilog.Events;
 
@@ -67,6 +69,17 @@ builder.Services.Configure<LogCleanupOptions>(builder.Configuration.GetSection("
 // Register log cleanup background service
 builder.Services.AddHostedService<LogCleanupBackgroundService>();
 
+// Register GraphQL
+builder.Services
+    .AddGraphQLServer()
+    .AddQueryType<Query>()
+    .AddType<ProjectType>()
+    .AddType<PagedResultOfProjectType>()
+    .AddType<ProjectTaskSummaryType>()
+    .AddType<GetProjectByIdResultType>()
+    .AddType<EnumType<VALUM.Domain.Enums.ProjectStatus>>()
+    .ModifyRequestOptions(opt => opt.IncludeExceptionDetails = false);
+
 var app = builder.Build();
 
 // Correlation ID middleware must be early in the pipeline
@@ -90,7 +103,10 @@ app.UseSerilogRequestLogging(options =>
     };
 });
 
-// Global exception handling must be registered early in the pipeline
+// Map GraphQL (before exception handling, GraphQL has its own error handling)
+app.MapGraphQL();
+
+// Global exception handling for REST (after GraphQL)
 app.UseCustomExceptionHandling();
 
 // Map controllers
