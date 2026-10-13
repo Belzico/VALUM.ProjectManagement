@@ -67,5 +67,21 @@ namespace VALUM.Infrastructure.Projects
             _context.Projects.Update(project);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<List<Project>> GetPageByCursorAsync(ProjectStatus? status, DateTime? cursorCreatedAt, Guid? cursorId, int take)
+        {
+            var q = _context.Projects.AsQueryable();
+            if (status.HasValue) q = q.Where(p => p.Status == status.Value);
+
+            q = q.OrderBy(p => p.CreatedAt).ThenBy(p => p.Id);
+
+            if (cursorCreatedAt.HasValue && cursorId.HasValue)
+            {
+                q = q.Where(p => p.CreatedAt > cursorCreatedAt.Value ||
+                                  (p.CreatedAt == cursorCreatedAt.Value && p.Id > cursorId.Value));
+            }
+
+            return await q.Take(take).ToListAsync();
+        }
     }
 }

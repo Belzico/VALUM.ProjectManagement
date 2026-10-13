@@ -95,5 +95,26 @@ namespace VALUM.Api.Controllers
             await _mediator.Send(command);
             return NoContent();
         }
+
+        [HttpGet("cursor")]
+        public async Task<IActionResult> GetByCursor([FromQuery] string? cursor, [FromQuery] int pageSize = 10, [FromQuery] ProjectStatus? status = null)
+        {
+            try
+            {
+                var query = new GetProjectsByCursorQuery { Cursor = cursor, PageSize = pageSize, Status = status };
+                var result = await _mediator.Send(query);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    status = 400,
+                    error = "ValidationException",
+                    message = ex.Message,
+                    details = Array.Empty<object>()
+                });
+            }
+        }
     }
 }

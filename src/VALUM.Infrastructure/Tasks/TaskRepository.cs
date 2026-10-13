@@ -76,5 +76,26 @@ namespace VALUM.Infrastructure.Tasks
             _context.Tasks.Update(task);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<List<TaskItem>> GetPageByCursorAsync(Guid projectId, VALUM.Domain.Enums.TaskStatus? status, TaskPriority? priority, DateTime? cursorCreatedAt, Guid? cursorId, int take)
+        {
+            var q = _context.Tasks.Where(t => t.ProjectId == projectId && !t.IsDeleted);
+
+            if (status.HasValue)
+                q = q.Where(t => t.Status == status.Value);
+
+            if (priority.HasValue)
+                q = q.Where(t => t.Priority == priority.Value);
+
+            q = q.OrderBy(t => t.CreatedAt).ThenBy(t => t.Id);
+
+            if (cursorCreatedAt.HasValue && cursorId.HasValue)
+            {
+                q = q.Where(t => t.CreatedAt > cursorCreatedAt.Value ||
+                                  (t.CreatedAt == cursorCreatedAt.Value && t.Id > cursorId.Value));
+            }
+
+            return await q.Take(take).ToListAsync();
+        }
     }
 }

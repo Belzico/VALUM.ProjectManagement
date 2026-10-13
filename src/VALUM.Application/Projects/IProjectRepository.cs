@@ -21,5 +21,7 @@ namespace VALUM.Application.Projects
         Task<bool> ExistsAsync(Guid id);
 
         Task UpdateAsync(Project project);
+
+        Task<List<Project>> GetPageByCursorAsync(ProjectStatus? status, DateTime? cursorCreatedAt, Guid? cursorId, int take);
     }
 }

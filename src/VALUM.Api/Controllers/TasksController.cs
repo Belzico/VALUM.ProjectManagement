@@ -120,7 +120,7 @@ namespace VALUM.Api.Controllers
             return Created($"/api/tasks/{dto.Id}", dto);
         }
 
-        [HttpGet]
+        [HttpGet("")]
         public async Task<IActionResult> Get([FromRoute] string projectId, [FromQuery] VALUM.Domain.Enums.TaskStatus? status, [FromQuery] TaskPriority? priority, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             if (!Guid.TryParse(projectId, out var guidProjectId))
@@ -161,6 +161,38 @@ namespace VALUM.Api.Controllers
             var query = new GetTasksQuery { ProjectId = guidProjectId, Status = status, Priority = priority, Page = page, PageSize = pageSize };
             var result = await _mediator.Send(query);
             return Ok(result);
+        }
+
+        [HttpGet("cursor")]
+        public async Task<IActionResult> GetByCursor([FromRoute] string projectId, [FromQuery] string? cursor, [FromQuery] int pageSize = 10, [FromQuery] VALUM.Domain.Enums.TaskStatus? status = null, [FromQuery] TaskPriority? priority = null)
+        {
+            if (!Guid.TryParse(projectId, out var guidProjectId))
+            {
+                return BadRequest(new
+                {
+                    status = 400,
+                    error = "ValidationException",
+                    message = "Invalid project ID format.",
+                    details = Array.Empty<object>()
+                });
+            }
+
+            try
+            {
+                var query = new GetTasksByCursorQuery { ProjectId = guidProjectId, Cursor = cursor, PageSize = pageSize, Status = status, Priority = priority };
+                var result = await _mediator.Send(query);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    status = 400,
+                    error = "ValidationException",
+                    message = ex.Message,
+                    details = Array.Empty<object>()
+                });
+            }
         }
     }
 

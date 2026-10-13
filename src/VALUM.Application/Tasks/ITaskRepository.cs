@@ -15,5 +15,6 @@ namespace VALUM.Application.Tasks
         Task<int> CountAsync(Guid projectId, VALUM.Domain.Enums.TaskStatus? status, TaskPriority? priority);
         Task<TaskItem?> GetByIdAsync(Guid id);
         Task UpdateAsync(TaskItem task);
+        Task<List<TaskItem>> GetPageByCursorAsync(Guid projectId, VALUM.Domain.Enums.TaskStatus? status, TaskPriority? priority, DateTime? cursorCreatedAt, Guid? cursorId, int take);
     }
 }
