@@ -1,0 +1,1030 @@
+{
+  "info": {
+    "_postman_id": "f5e58a36-e294-472e-9284-80ca232db1b6",
+    "name": "VALUM | Extras — Serilog, GraphQL y Cursor Pagination (solo lectura)",
+    "description": "Colección unificada EXCLUSIVA para los 3 extras implementados: Serilog/CorrelationId, Hot Chocolate GraphQL y Cursor Pagination. 27 peticiones GET/POST GraphQL (todas de lectura) y pruebas automáticas de respuesta; NO hay POST/PATCH/DELETE REST, ni seeds, ni migraciones, ni borrado de datos. Ejecutar EN ORDEN en Collection Runner, sin paralelismo. Requiere API arrancada en {{baseUrl}}, al menos 3 proyectos (al menos 3 activos si desea validar los casos de filtros) y que el proyecto más antiguo tenga al menos 3 tareas NO eliminadas; compatible con la base de pruebas manual que ya contiene datos. En una base vacía, activar seed de desarrollo antes de ejecutar. No ejecutar contra producción. Para verificar persistencia de logs, comprobar manualmente en el equipo servidor src/VALUM.Api/logs/valum-*.log buscando el CorrelationId indicado en Postman Console; Postman no puede leer archivos del servidor. El README se preparará después, no forma parte de esta colección.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4596",
+      "type": "string"
+    },
+    {
+      "key": "vxCid",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.collectionVariables.set(\"vxCid\", pm.variables.replaceIn(\"{{$guid}}\"));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — Serilog y CorrelationId",
+      "description": "Solo GET. Verifica encabezados con GUID explícito, ausente e inválido y error 400 con ID. La escritura real en archivo de logs debe comprobarse en PowerShell después.",
+      "item": [
+        {
+          "name": "01 — /health | CorrelationId explícito",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/health",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Health correcto\", () => pm.expect(pm.response.json().status).to.eql(\"Healthy\"));",
+                  "console.log(\"[VALUM] Buscar este CorrelationId en el log del servidor: \" + cid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — /health | CorrelationId ausente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"CorrelationId generado automáticamente\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "console.log(\"[VALUM] CorrelationId generado: \" + cid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — /health | CorrelationId inválido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "not-a-guid"
+              }
+            ],
+            "url": "{{baseUrl}}/health",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"API genera un CorrelationId válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"No reutiliza el identificador inválido\", () => pm.expect(cid).not.to.eql(\"not-a-guid\"));",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "console.log(\"[VALUM] CorrelationId que reemplaza el inválido: \" + cid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — HTTP 400 | Se conserva el CorrelationId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=51",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });",
+                  "console.log(\"[VALUM] Comprobar aviso 400 en log con CorrelationId: \" + cid);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Hot Chocolate GraphQL",
+      "description": "Consultas exclusivamente a /graphql: listados, filtros, detalle, paginación y errores. Guarda snapshots de IDs para comparar con Cursor Pagination.",
+      "item": [
+        {
+          "name": "05 — projects | página 1 (2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { projects(page: 1, pageSize: 2) { items { id name status } page pageSize totalCount totalPages hasPrevious hasNext } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"GraphQL sin errores\", () => pm.expect(b.errors || []).to.be.empty);",
+                  "const p=b.data.projects;",
+                  "pm.test(\"Shape y metadatos correctos\", () => { pm.expect(p.items).to.be.an(\"array\"); pm.expect(p.page).to.eql(1);pm.expect(p.pageSize).to.eql(2);pm.expect(p.totalCount).to.be.a(\"number\");pm.expect(p.totalPages).to.be.a(\"number\");pm.expect(p.hasNext).to.be.a(\"boolean\");});",
+                  "pm.test(\"Datos para las pruebas de cursor (>=3 proyectos)\", () => pm.expect(p.totalCount, \"Use DB con >= 3 proyectos\").to.be.at.least(3));",
+                  "pm.collectionVariables.set(\"vxGqlFirstIds\",JSON.stringify(p.items.map(i=>i.id.replace(/-/g, \"\").toLowerCase())));",
+                  "if(p.items.length){const hex=p.items[0].id.replace(/-/g, \"\").toLowerCase();pm.collectionVariables.set(\"vxProjectId\", hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, \"$1-$2-$3-$4-$5\"));}",
+                  "if(p.items.length>1){const hex=p.items[1].id.replace(/-/g, \"\").toLowerCase();pm.collectionVariables.set(\"vxOtherProjectId\", hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, \"$1-$2-$3-$4-$5\"));}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — projects | filtro ACTIVE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { projects(page: 1, pageSize: 2, status: ACTIVE) { items { id name status } page pageSize totalCount totalPages hasPrevious hasNext } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Sin errores\",()=>pm.expect(b.errors||[]).to.be.empty);",
+                  "const p=b.data.projects;",
+                  "pm.test(\"Solo ACTIVE\",()=>{pm.expect(p.items).to.be.an(\"array\");p.items.forEach(x=>pm.expect(x.status).to.eql(\"ACTIVE\"));});",
+                  "pm.test(\"Base contiene al menos 3 proyectos ACTIVE\",()=>pm.expect(p.totalCount, \"Para probar continuidad filtrada\").to.be.at.least(3));",
+                  "pm.collectionVariables.set(\"vxGqlActiveIds\",JSON.stringify(p.items.map(i=>i.id.replace(/-/g, \"\").toLowerCase())));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — projects | filtro ARCHIVED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { projects(page: 1, pageSize: 2, status: ARCHIVED) { items { id name status } page pageSize totalCount totalPages hasPrevious hasNext } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Sin errores\",()=>pm.expect(b.errors||[]).to.be.empty);",
+                  "const p=b.data.projects;",
+                  "pm.test(\"Solo ARCHIVED\",()=>{pm.expect(p.items).to.be.an(\"array\");p.items.forEach(x=>pm.expect(x.status).to.eql(\"ARCHIVED\"));});",
+                  "pm.collectionVariables.set(\"vxGqlArchivedIds\",JSON.stringify(p.items.map(i=>i.id.replace(/-/g, \"\").toLowerCase())));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 — projects | página 2 (offset GraphQL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { projects(page: 2, pageSize: 2) { items { id name status } page pageSize totalCount totalPages hasPrevious hasNext } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Sin errores\",()=>pm.expect(b.errors||[]).to.be.empty);",
+                  "const p=b.data.projects;",
+                  "pm.test(\"Página 2 y tamaño 2\",()=>{pm.expect(p.page).to.eql(2);pm.expect(p.pageSize).to.eql(2);pm.expect(p.items).to.be.an(\"array\");});",
+                  "const ids=p.items.map(i=>i.id.replace(/-/g, \"\").toLowerCase());",
+                  "pm.test(\"No duplica página 1 GraphQL\",()=>{const seen=JSON.parse(pm.collectionVariables.get(\"vxGqlFirstIds\")||\"[]\");ids.forEach(id=>pm.expect(seen).not.to.include(id));});",
+                  "pm.collectionVariables.set(\"vxGqlSecondIds\",JSON.stringify(ids));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 — project(id) | detalle y summary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query ProjectDetail($id: UUID!) { project(id: $id) { project { id name status } summary { totalTasks completedTasks inProgressTasks pendingTasks } } }\",\n  \"variables\": {\n    \"id\": \"{{vxProjectId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"GraphQL sin errores\",()=>pm.expect(b.errors||[]).to.be.empty);",
+                  "const d=b.data.project;",
+                  "pm.test(\"Mismo proyecto de la primera página\",()=>pm.expect(d.project.id.replace(/-/g,\"\").toLowerCase()).to.eql(pm.collectionVariables.get(\"vxProjectId\").replace(/-/g,\"\").toLowerCase()));",
+                  "pm.test(\"Summary coherente\",()=>{const s=d.summary;[s.totalTasks,s.completedTasks,s.inProgressTasks,s.pendingTasks].forEach(x=>pm.expect(x).to.be.a(\"number\").and.at.least(0));pm.expect(s.totalTasks).to.eql(s.completedTasks+s.inProgressTasks+s.pendingTasks);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 — projects | pageSize 51 rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { projects(pageSize: 51) { totalCount } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"Error de GraphQL (HTTP 200 o 400)\",()=>pm.expect([200,400]).to.include(pm.response.code));",
+                  "const b=pm.response.json();pm.test(\"GraphQL informa del error\",()=>{pm.expect(b.errors).to.be.an(\"array\").that.is.not.empty;pm.expect(JSON.stringify(b.errors)).to.match(/pageSize|50|valid|greater|limit/i);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 — projects | enum inválido rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { projects(status: INVALID_STATUS) { totalCount } }\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"Error de GraphQL (HTTP 200 o 400)\",()=>pm.expect([200,400]).to.include(pm.response.code));",
+                  "const b=pm.response.json();pm.test(\"Enum inválido genera errors\",()=>pm.expect(b.errors).to.be.an(\"array\").that.is.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 — GET /graphql | query por URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/graphql?query=query%20%7B%20projects%28page%3A%201%2C%20pageSize%3A%201%29%20%7B%20items%20%7B%20id%20%7D%20totalCount%20%7D%20%7D",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"GET GraphQL devuelve proyectos\",()=>{pm.expect(b.errors||[]).to.be.empty;pm.expect(b.data.projects.items).to.be.an(\"array\");pm.expect(b.data.projects.totalCount).to.be.a(\"number\");});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Cursor Pagination | proyectos",
+      "description": "Paginación keyset con filtros, comparación con GraphQL, continuidad y rechazo de cursores incorrectos. No requiere DB vacía.",
+      "item": [
+        {
+          "name": "13 — Projects cursor | primera página (2)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test(\"2 proyectos, hasNext y token\",()=>{pm.expect(b.items).to.be.an(\"array\").with.lengthOf(2);pm.expect(b.hasNext).to.eql(true);pm.expect(b.nextCursor).to.be.a(\"string\").that.is.not.empty;});",
+                  "const ids=b.items.map(i=>i.id.replace(/-/g,\"\").toLowerCase());",
+                  "pm.test(\"Mismos proyectos y orden que GraphQL\",()=>pm.expect(ids).to.deep.eql(JSON.parse(pm.collectionVariables.get(\"vxGqlFirstIds\"))));",
+                  "pm.collectionVariables.set(\"vxProjectCursor\",b.nextCursor);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 — Projects cursor | segunda página (2)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2&cursor={{vxProjectCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Página 2 con items\",()=>pm.expect(b.items).to.be.an(\"array\").that.is.not.empty);",
+                  "const ids=b.items.map(i=>i.id.replace(/-/g,\"\").toLowerCase());",
+                  "pm.test(\"No repite IDs página 1\",()=>{const seen=JSON.parse(pm.collectionVariables.get(\"vxGqlFirstIds\"));ids.forEach(i=>pm.expect(seen).not.to.include(i));});",
+                  "pm.test(\"Mismos IDs que página 2 GraphQL\",()=>pm.expect(ids).to.deep.eql(JSON.parse(pm.collectionVariables.get(\"vxGqlSecondIds\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 — Projects cursor | ACTIVE filtrado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2&status=Active",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Solo activos, cursor y continuación\",()=>{pm.expect(b.items).to.be.an(\"array\").with.lengthOf(2);b.items.forEach(i=>pm.expect(i.status).to.eql(0));pm.expect(b.hasNext).to.eql(true);pm.expect(b.nextCursor).to.be.a(\"string\").that.is.not.empty;});",
+                  "pm.test(\"Mismos IDs que GraphQL ACTIVE\",()=>pm.expect(b.items.map(i=>i.id.replace(/-/g,\"\").toLowerCase())).to.deep.eql(JSON.parse(pm.collectionVariables.get(\"vxGqlActiveIds\"))));",
+                  "pm.collectionVariables.set(\"vxActiveCursor\",b.nextCursor);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 — Projects cursor | ARCHIVED filtrado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2&status=Archived",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Solo archivados\",()=>{pm.expect(b.items).to.be.an(\"array\");b.items.forEach(i=>pm.expect(i.status).to.eql(1));});",
+                  "pm.test(\"Mismos IDs que GraphQL ARCHIVED\",()=>pm.expect(b.items.map(i=>i.id.replace(/-/g,\"\").toLowerCase())).to.deep.eql(JSON.parse(pm.collectionVariables.get(\"vxGqlArchivedIds\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 — Projects cursor | filtro distinto del token → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2&status=Archived&cursor={{vxActiveCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18 — Projects cursor | tamaño distinto del token → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=3&status=Active&cursor={{vxActiveCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 — Projects cursor | token malformado → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2&cursor=not-valid-token",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 — Projects cursor | pageSize 51 → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=51",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Cursor Pagination | tareas",
+      "description": "Reutiliza automáticamente el ID del primer proyecto GraphQL. Necesita que ese proyecto tenga al menos 3 tareas no eliminadas para demostrar la segunda página. También comprueba filtros y el aislamiento de tokens.",
+      "item": [
+        {
+          "name": "21 — Tasks cursor | primera página (2)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{vxProjectId}}/tasks/cursor?pageSize=2",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();pm.test(\"Al menos 3 tareas para probar el cursor\",()=>{pm.expect(b.items,\"El proyecto más antiguo requiere >=3 tareas no eliminadas\").to.be.an(\"array\").with.lengthOf(2);pm.expect(b.hasNext).to.eql(true);pm.expect(b.nextCursor).to.be.a(\"string\").that.is.not.empty;});",
+                  "pm.test(\"Tareas del proyecto elegido\",()=>b.items.forEach(t=>pm.expect(t.projectId.replace(/-/g,\"\").toLowerCase()).to.eql(pm.collectionVariables.get(\"vxProjectId\").replace(/-/g,\"\").toLowerCase())));",
+                  "pm.collectionVariables.set(\"vxTaskCursor\",b.nextCursor);",
+                  "pm.collectionVariables.set(\"vxTaskFirstIds\",JSON.stringify(b.items.map(i=>i.id.toLowerCase())));",
+                  "if(b.items.length){const t=b.items[0];pm.collectionVariables.set(\"vxTaskStatus\",[\"Todo\",\"InProgress\",\"Done\"][t.status]);pm.collectionVariables.set(\"vxTaskPriority\",[\"Low\",\"Medium\",\"High\"][t.priority]);}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 — Tasks cursor | segunda página",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{vxProjectId}}/tasks/cursor?pageSize=2&cursor={{vxTaskCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test(\"Continuación sin repetidos\",()=>{pm.expect(b.items).to.be.an(\"array\").that.is.not.empty;const seen=JSON.parse(pm.collectionVariables.get(\"vxTaskFirstIds\"));b.items.forEach(t=>{pm.expect(seen).not.to.include(t.id.toLowerCase());pm.expect(t.projectId.replace(/-/g,\"\").toLowerCase()).to.eql(pm.collectionVariables.get(\"vxProjectId\").replace(/-/g,\"\").toLowerCase());});});",
+                  "pm.test(\"Consistencia token final\",()=>{if(!b.hasNext)pm.expect(b.nextCursor).to.eql(null);});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 — Tasks cursor | filtro status + priority",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{vxProjectId}}/tasks/cursor?pageSize=10&status={{vxTaskStatus}}&priority={{vxTaskPriority}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();const statuses={Todo:0,InProgress:1,Done:2},priorities={Low:0,Medium:1,High:2};",
+                  "pm.test(\"Filtros combinados funcionan\",()=>{pm.expect(b.items).to.be.an(\"array\").that.is.not.empty;b.items.forEach(t=>{pm.expect(t.status).to.eql(statuses[pm.collectionVariables.get(\"vxTaskStatus\")]);pm.expect(t.priority).to.eql(priorities[pm.collectionVariables.get(\"vxTaskPriority\")]);});});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24 — Token PROJECT en TASK → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{vxProjectId}}/tasks/cursor?pageSize=2&cursor={{vxProjectCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "25 — Token TASK en PROJECT → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/cursor?pageSize=2&cursor={{vxTaskCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "26 — Token TASK en otro proyecto → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{vxOtherProjectId}}/tasks/cursor?pageSize=2&cursor={{vxTaskCursor}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27 — Tasks cursor | pageSize 51 → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{vxCid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{vxProjectId}}/tasks/cursor?pageSize=51",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cid = pm.response.headers.get(\"X-Correlation-ID\");",
+                  "pm.test(\"X-Correlation-ID devuelto y válido\", () => pm.expect(cid).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  "pm.test(\"CorrelationId coincide con el enviado\", () => pm.expect(cid.toLowerCase()).to.eql(pm.collectionVariables.get(\"vxCid\").toLowerCase()));",
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json();",
+                  "pm.test(\"Error estándar de VALUM\", () => { pm.expect(e.status).to.eql(400); pm.expect(e.error).to.be.a(\"string\"); pm.expect(e.message).to.be.a(\"string\"); pm.expect(e.details).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
